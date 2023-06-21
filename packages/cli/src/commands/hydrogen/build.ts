@@ -32,7 +32,7 @@ const LOG_WORKER_BUILT = '📦 Worker built';
 
 export default class Build extends Command {
   static description = 'Builds a Hydrogen storefront for production.';
-  static flags: any = {
+  static flags = {
     path: commonFlags.path,
     sourcemap: Flags.boolean({
       description: 'Generate sourcemaps for the build.',
@@ -74,15 +74,20 @@ export async function runBuild({
   codegenConfigPath,
   sourcemap = false,
   disableRouteWarning = false,
+  assetPath,
 }: {
   path?: string;
   useCodegen?: boolean;
   codegenConfigPath?: string;
   sourcemap?: boolean;
   disableRouteWarning?: boolean;
+  assetPath?: string;
 }) {
   if (!process.env.NODE_ENV) {
     process.env.NODE_ENV = 'production';
+  }
+  if (assetPath) {
+    process.env.HYDROGEN_ASSET_BASE_URL = assetPath;
   }
 
   const {root, buildPath, buildPathClient, buildPathWorkerFile, publicPath} =
@@ -93,7 +98,6 @@ export async function runBuild({
   console.time(LOG_WORKER_BUILT);
 
   outputInfo(`\n🏗️  Building in ${process.env.NODE_ENV} mode...`);
-
   const [remixConfig, {build}, {logThrown}, {createFileWatchCache}] =
     await Promise.all([
       getRemixConfig(root),
@@ -143,7 +147,7 @@ export async function runBuild({
     }
 
     if (sourcemap) {
-      if (process.env.HYDROGEN_ASSET_BASE_URL) {
+      if (assetPath) {
         // Oxygen build
         const filepaths = await glob(joinPath(buildPathClient, '**/*.js.map'));
         for (const filepath of filepaths) {
@@ -175,8 +179,10 @@ export async function runBuild({
 
   // The Remix compiler hangs due to a bug in ESBuild:
   // https://github.com/evanw/esbuild/issues/2727
-  // The actual build has already finished so we can kill the process.
-  process.exit(0);
+  // The actual build has already finished so we can kill the process, unless we are deploying to Oxygen
+  if (!assetPath) {
+    process.exit(0);
+  }
 }
 
 export async function copyPublicFiles(
