@@ -28,6 +28,7 @@ import {
 } from '@shopify/hydrogen-react/storefront-api-types';
 import {warnOnce} from './utils/warning';
 import {LIB_VERSION} from './version';
+import {LogSubRequestProps} from './utils/log';
 
 type StorefrontApiResponse<T> = StorefrontApiResponseOk<T>;
 
@@ -178,6 +179,7 @@ type HydrogenClientProps<TI18n> = {
   waitUntil?: ExecutionContext['waitUntil'];
   /** An object containing a country code and language code */
   i18n?: TI18n;
+  log?: (props: LogSubRequestProps) => void;
 };
 
 export type CreateStorefrontClientOptions<TI18n extends I18nBase> =
@@ -227,7 +229,9 @@ const defaultI18n: I18nBase = {language: 'EN', country: 'US'};
 export function createStorefrontClient<TI18n extends I18nBase>(
   options: CreateStorefrontClientOptions<TI18n>,
 ): StorefrontClient<TI18n> {
+  const startTime = new Date().getTime();
   const {
+    log,
     storefrontHeaders,
     cache,
     waitUntil,
@@ -338,6 +342,14 @@ export function createStorefrontClient<TI18n extends I18nBase>(
       queryVariables,
       errors: undefined,
     };
+
+    log &&
+      log({
+        query,
+        requestHeaders: {...defaultHeaders, ...userHeaders},
+        response,
+        startTime,
+      });
 
     if (!response.ok) {
       /**

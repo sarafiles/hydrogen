@@ -9,6 +9,8 @@ import {
   cartSetIdDefault,
   createCartHandler,
   createStorefrontClient,
+  logRequest,
+  logSubRequest,
   storefrontRedirect,
 } from '@shopify/hydrogen';
 
@@ -24,6 +26,7 @@ export default {
     env: Env,
     executionContext: ExecutionContext,
   ): Promise<Response> {
+    const startTime = new Date().getTime();
     try {
       /**
        * Open a cache instance in the worker and a custom session instance.
@@ -41,6 +44,8 @@ export default {
       /**
        * Create Hydrogen's Storefront client.
        */
+
+      const storefrontHeaders = getStorefrontHeaders(request);
       const {storefront} = createStorefrontClient({
         cache,
         waitUntil,
@@ -49,7 +54,8 @@ export default {
         privateStorefrontToken: env.PRIVATE_STOREFRONT_API_TOKEN,
         storeDomain: env.PUBLIC_STORE_DOMAIN,
         storefrontId: env.PUBLIC_STOREFRONT_ID,
-        storefrontHeaders: getStorefrontHeaders(request),
+        storefrontHeaders,
+        log: logSubRequest,
       });
 
       const cart = createCartHandler({
@@ -84,6 +90,8 @@ export default {
          */
         return storefrontRedirect({request, response, storefront});
       }
+
+      logRequest({request, storefrontHeaders, startTime});
 
       return response;
     } catch (error) {
