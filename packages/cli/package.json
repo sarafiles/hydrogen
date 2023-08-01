@@ -39,7 +39,7 @@
     "@shopify/cli-kit": "3.48.0",
     "@shopify/hydrogen-codegen": "^0.0.2",
     "@shopify/mini-oxygen": "^1.7.0",
-    "@shopify/oxygen-cli": "^1.8.0",
+    "@shopify/oxygen-cli": "^1.8.2",
     "ansi-escapes": "^6.2.0",
     "diff": "^5.1.0",
     "fast-glob": "^3.2.12",
