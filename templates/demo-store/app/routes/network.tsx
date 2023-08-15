@@ -16,7 +16,7 @@ export default function Network() {
   });
 
   // For triggering a react render
-  const [_t, setTimestamp] = useState<number>();
+  const [timestamp, setTimestamp] = useState<number>();
 
   useEffect(() => {
     const evtSource = new EventSource('/server-network-debug', {
@@ -75,7 +75,7 @@ export default function Network() {
       >
         Clear
       </Button>
-      <ChartServerEvents serverEvents={serverEvents.current} />
+      <ChartServerEvents key={timestamp} serverEvents={serverEvents.current} />
     </>
   );
 }

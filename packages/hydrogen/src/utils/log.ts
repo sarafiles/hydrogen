@@ -38,7 +38,9 @@ export function logRequest({
     event: 'Request',
     data: JSON.stringify({
       id: storefrontHeaders.requestGroupId,
-      url: request.url,
+      url: `${
+        request.headers.get('purpose') === 'prefetch' ? '(prefetch)' : ''
+      } ${request.url}`,
       startTime,
       endTime: new Date().getTime(),
     }),
@@ -52,11 +54,14 @@ export function logSubRequest({
   startTime,
 }: LogSubRequestProps) {
   const queryName = query.match(/query \w*/);
+  const url = `${
+    requestHeaders['purpose'] === 'prefetch' ? '(prefetch)' : ''
+  } ${queryName ? queryName[0] : 'query'}`;
   requests.push({
     event: 'Sub request',
     data: JSON.stringify({
       id: requestHeaders['Custom-Storefront-Request-Group-ID'],
-      url: queryName ? queryName[0] : 'query',
+      url,
       startTime,
       endTime: new Date().getTime(),
     }),
