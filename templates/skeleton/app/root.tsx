@@ -5,13 +5,14 @@ import {
   Outlet,
   Scripts,
   useCatch,
+  LiveReload,
   useMatches,
   useRouteError,
   useLoaderData,
   ScrollRestoration,
   isRouteErrorResponse,
 } from '@remix-run/react';
-import type {CustomerAccessToken} from '@shopify/hydrogen-react/storefront-api-types';
+import type {CustomerAccessToken} from '@shopify/hydrogen/storefront-api-types';
 import type {HydrogenSession} from '../server';
 import favicon from '../public/favicon.svg';
 import resetStyles from './styles/reset.css';
@@ -93,6 +94,7 @@ export default function App() {
         </Layout>
         <ScrollRestoration />
         <Scripts />
+        <LiveReload />
       </body>
     </html>
   );
@@ -133,6 +135,7 @@ export function ErrorBoundary() {
         </Layout>
         <ScrollRestoration />
         <Scripts />
+        <LiveReload />
       </body>
     </html>
   );
