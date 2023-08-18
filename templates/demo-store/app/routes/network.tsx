@@ -1,9 +1,12 @@
 import {type ServerEvent} from '@shopify/hydrogen';
 import {useEffect, useRef, useState} from 'react';
+import type {Waterfall, WaterfallItems} from 'flame-chart-js';
 
 import {Button} from '~/components';
+import {FlameChartWrapper} from '~/components/FlameChartWrapper';
 
 type ServerEvents = {
+  smallestStartTime: number;
   mainRequests: ServerEvent[];
   subRequests: Record<string, ServerEvent[]>;
 };
@@ -11,6 +14,7 @@ type ServerEvents = {
 export default function Network() {
   // Store server event data that can arrive at anytime across renders
   const serverEvents = useRef<ServerEvents>({
+    smallestStartTime: 0,
     mainRequests: [],
     subRequests: {},
   });
@@ -25,6 +29,21 @@ export default function Network() {
 
     function requestHandler(event: MessageEvent) {
       const data = JSON.parse(event.data) as unknown as ServerEvent;
+
+      if (
+        data.url.includes('server-network-debug') ||
+        data.url.includes('network')
+      )
+        return;
+
+      if (serverEvents.current.smallestStartTime === 0) {
+        serverEvents.current.smallestStartTime = data.startTime;
+      } else {
+        serverEvents.current.smallestStartTime = Math.min(
+          data.startTime,
+          serverEvents.current.smallestStartTime,
+        );
+      }
 
       serverEvents.current.mainRequests = [
         ...serverEvents.current.mainRequests,
@@ -41,6 +60,21 @@ export default function Network() {
 
     function subRequestHandler(event: MessageEvent) {
       const data = JSON.parse(event.data) as unknown as ServerEvent;
+
+      if (
+        data.url.includes('server-network-debug') ||
+        data.url.includes('network')
+      )
+        return;
+
+      if (serverEvents.current.smallestStartTime === 0) {
+        serverEvents.current.smallestStartTime = data.startTime;
+      } else {
+        serverEvents.current.smallestStartTime = Math.min(
+          data.startTime,
+          serverEvents.current.smallestStartTime,
+        );
+      }
 
       let groupEvents = serverEvents.current.subRequests[data.id] || [];
       groupEvents = [...groupEvents, data];
@@ -65,8 +99,10 @@ export default function Network() {
     <>
       <Button
         as="button"
+        className="mb-4"
         onClick={() => {
           serverEvents.current = {
+            smallestStartTime: 0,
             mainRequests: [],
             subRequests: {},
           };
@@ -75,106 +111,90 @@ export default function Network() {
       >
         Clear
       </Button>
-      <ChartServerEvents key={timestamp} serverEvents={serverEvents.current} />
+      <FlameChart key={timestamp} serverEvents={serverEvents.current} />
     </>
   );
 }
 
-function ChartServerEvents({serverEvents}: {serverEvents: ServerEvents}) {
+function FlameChart({serverEvents}: {serverEvents: ServerEvents}) {
+  if (serverEvents.mainRequests.length === 0) return null;
+
+  const calcDuration = (time: number) => time - serverEvents.smallestStartTime;
+  let items: WaterfallItems = [];
+
+  serverEvents.mainRequests.forEach((mainRequest: ServerEvent) => {
+    const mainResponseStart = calcDuration(mainRequest.endTime);
+    let mainResponseEnd = mainResponseStart;
+
+    const subRequestItems: WaterfallItems = [];
+    const subRequests = serverEvents.subRequests[mainRequest.id] || [];
+    subRequests.forEach((subRequest: ServerEvent) => {
+      const subRequestEnd = calcDuration(subRequest.endTime);
+      mainResponseEnd = Math.max(mainResponseEnd, subRequestEnd);
+
+      subRequestItems.push({
+        name: subRequest.url,
+        intervals: 'request',
+        timing: {
+          requestStart: calcDuration(subRequest.startTime),
+          requestEnd: subRequestEnd,
+        },
+      });
+    });
+
+    items.push({
+      name: mainRequest.url,
+      intervals: 'mainRequest',
+      timing: {
+        requestStart: calcDuration(mainRequest.startTime),
+        responseStart: mainResponseStart,
+        responseEnd: mainResponseEnd,
+      },
+    });
+    items = items.concat(subRequestItems);
+  });
+
+  const data: Waterfall = {
+    items,
+    intervals: {
+      mainRequest: [
+        {
+          name: 'server',
+          color: '#99CC00',
+          type: 'block',
+          start: 'requestStart',
+          end: 'responseStart',
+        },
+        {
+          name: 'streaming',
+          color: '#33CCFF',
+          type: 'block',
+          start: 'responseStart',
+          end: 'responseEnd',
+        },
+      ],
+      request: [
+        {
+          name: 'request',
+          color: '#FFCC00',
+          type: 'block',
+          start: 'requestStart',
+          end: 'requestEnd',
+        },
+      ],
+    },
+  };
   return (
-    <>
-      {serverEvents &&
-        serverEvents.mainRequests.map((mainRequest: ServerEvent) => {
-          const subRequests = serverEvents.subRequests[mainRequest.id] || [];
-
-          let maxSubRequestDuration = 0;
-          let totalDuration = 0;
-          subRequests.forEach((subRequest: ServerEvent) => {
-            const duration = subRequest.endTime - subRequest.startTime;
-            if (duration > maxSubRequestDuration) {
-              maxSubRequestDuration = duration;
-              totalDuration =
-                maxSubRequestDuration +
-                (subRequest.startTime - mainRequest.startTime);
-            }
-          });
-          const ttfb = mainRequest.endTime - mainRequest.startTime;
-          const timeWidth = (ttfb / totalDuration) * 100;
-
-          return (
-            <details key={mainRequest.id}>
-              <summary>
-                <div
-                  className="flex"
-                  style={{
-                    backgroundColor: '#0599de',
-                  }}
-                >
-                  <div
-                    style={{
-                      overflow: 'hidden',
-                      backgroundColor: '#00a846',
-                      width: `${timeWidth}%`,
-                    }}
-                  >
-                    {mainRequest.url}
-                  </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      width: `${100 - timeWidth}%`,
-                    }}
-                  >
-                    <div>TTFB: {ttfb}ms</div>
-                    <div>{totalDuration}ms</div>
-                  </div>
-                </div>
-              </summary>
-              {subRequests.map((subRequest: ServerEvent, idx: number) => {
-                const waitTime = subRequest.startTime - mainRequest.startTime;
-                const subRequestDuration =
-                  subRequest.endTime - subRequest.startTime;
-                return (
-                  <div
-                    key={idx}
-                    className={`flex${idx % 2 === 0 ? ' opacity-80' : ''}`}
-                  >
-                    <div
-                      style={{
-                        width: `${(waitTime / totalDuration) * 100}%`,
-                      }}
-                    >
-                      &nbsp;
-                    </div>
-                    <div
-                      style={{
-                        width: `${(subRequestDuration / totalDuration) * 100}%`,
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: 'absolute',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {subRequest.url} {subRequestDuration}ms
-                      </div>
-                      <div
-                        style={{
-                          backgroundColor: '#00a846',
-                          width: '100%',
-                        }}
-                      >
-                        &nbsp;
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </details>
-          );
-        })}
-    </>
+    <FlameChartWrapper
+      height={300}
+      waterfall={data}
+      settings={{
+        styles: {
+          waterfallPlugin: {
+            defaultHeight: 300,
+          },
+        },
+      }}
+    />
   );
 }
